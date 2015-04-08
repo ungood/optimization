@@ -3,11 +3,12 @@
 
 from collections import namedtuple
 Item = namedtuple("Item", ['index', 'value', 'weight'])
+Problem = namedtuple("Problem", ['capacity', 'items'])
+Solution = namedtuple("Solution", ['weight', 'value', 'items'])
 
-def solve_it(input_data):
-    # Modify this code to run your optimization algorithm
 
-    # parse the input
+def parse(input_data):
+    """Parse the input"""
     lines = input_data.split('\n')
 
     firstLine = lines[0].split()
@@ -19,25 +20,52 @@ def solve_it(input_data):
     for i in range(1, item_count+1):
         line = lines[i]
         parts = line.split()
-        items.append(Item(i-1, int(parts[0]), int(parts[1])))
+        item = Item(i-1, int(parts[0]), int(parts[1]))
+        items.append(item)
+        
+    return Problem(capacity, items)
 
-    # a trivial greedy algorithm for filling the knapsack
-    # it takes items in-order until the knapsack is full
+
+def greedy(problem, key):
+    sorted_items = sorted(problem.items, key=key)
+    
     value = 0
     weight = 0
-    taken = [0]*len(items)
+    taken = []
 
-    for item in items:
-        if weight + item.weight <= capacity:
-            taken[item.index] = 1
+    for item in sorted_items:
+        if weight + item.weight <= problem.capacity:
+            taken.append(item)
             value += item.value
             weight += item.weight
+            
+    return Solution(weight, value, taken)
+        
+        
+def trivial_solution(problem):
+    """
+    A trivial greedy algorithm for filling the knapsack.
+    Takes items in-order until the knapsack is full."""
+    return greedy(problem, lambda item: item.index)    
+
+            
+def output(problem, solution):
+    """Output the solution in the proper format."""
+    taken = [0]*len(problem.items)
     
-    # prepare the solution in the specified output format
-    output_data = str(value) + ' ' + str(0) + '\n'
+    for item in solution.items:
+        taken[item.index] = 1
+        
+    output_data = str(solution.value) + ' ' + str(0) + '\n'
     output_data += ' '.join(map(str, taken))
     return output_data
+    
 
+def solve_it(input_data):
+    # Modify this code to run your optimization algorithm
+    problem = parse(input_data) 
+    solution = trivial_solution(problem)
+    return output(problem, solution)
 
 import sys
 
