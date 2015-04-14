@@ -1,5 +1,7 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
+# 1/2 = 0.5
+from __future__ import division
 
 import logging
 import argparse
@@ -21,7 +23,7 @@ Item = np.dtype([
     ('index',   np.uint),
     ('weight',  np.uint),
     ('value',   np.uint),
-    ('density', np.uint)
+    ('density', np.float)
 ])
 
 class Problem(object):
@@ -144,23 +146,27 @@ class Branch(object):
         self.problem = problem
         self.items = problem.sorted_items
         self.selected = np.array(selected, dtype=bool)
-        self.J = len(selected)-1
+        self.J = len(selected)
         self.value = value
         self.weight = weight
-        self.leaf = self.J+1 == problem.N
+        self.leaf = self.J == problem.N
         self.viable = self.weight <= problem.capacity
         self.estimate = self.calc_estimate() if self.viable else -1
+        
+    def __str__(self):
+        return "{0}\n\tvalue='{1}', weight='{2}', estimate='{3}'".format(self.selected, self.value, self.weight, self.estimate)
             
     def calc_estimate(self):    
         estimate = self.value
         estimated_weight = self.weight
-        for i in range(self.J+1, self.problem.N):
+        for i in range(self.J, self.problem.N):
             w = self.items[i]['weight']
             v = self.items[i]['value']
             if (w + estimated_weight) > self.problem.capacity:
                 take_ratio = (self.problem.capacity - estimated_weight) / w
                 partial_value = v * take_ratio
-                return estimate + partial_value
+                # We know because the weights are integers that the actual optimal value must also be integer.
+                return int(estimate + partial_value)
             else:
                 estimate += v
                 estimated_weight += w
@@ -169,21 +175,22 @@ class Branch(object):
     def __cmp__(self, other):
         # heapq keeps the smallest item at the top, and I want to evaluate best-first,
         # so I need to reverse the compare.
-        return cmp(other.value, self.value)
+        #return cmp(other.value, self.value)
+        return cmp(self.estimate - self.value, other.estimate - other.value)
         
-    def left(self):
+    def skip_next(self):
         if self.leaf:
             return None
         
         selected = np.append(self.selected, [False])
         return Branch(self.problem, selected, self.value, self.weight)
     
-    def right(self):
+    def take_next(self):
         if self.leaf:
             return None
         
-        selected = np.append(self.selected, [True])
-        next_item = self.items[self.J+1]
+        selected = np.append(self.selected.copy(), [True])
+        next_item = self.items[self.J]
         return Branch(self.problem, selected,
             value=self.value + next_item['value'],
             weight=self.weight + next_item['weight'])
@@ -192,40 +199,37 @@ class BranchAndBoundSolver(object):
     def __init__(self, problem):
         problem.sorted_items = problem.items.copy()
         problem.sorted_items.sort(order=['density'])
+        problem.sorted_items[:] = problem.sorted_items[::-1]
         self.problem = problem
         
     def __call__(self):
         root = Branch(self.problem)
         queue = [root]
         best = root
-        
-        visited = 0
-        pruned = 0
-        skipped = 0
                 
         while len(queue) > 0:
-            visited += 1
             current = heapq.heappop(queue)
-            
+            log.debug('Visiting: %s', current)
+                        
             if current.estimate < best.value:
                 log.debug('%d is less than %d. Pruned.', current.estimate, best.value)
-                pruned += 1
                 continue
-                    
-            if current.value > best.value:
-                log.debug('%d is new best.', current.value)
-                best  = current
                 
-            if not current.leaf:
-                left = current.left()
-                if left.viable:
-                    heapq.heappush(queue, current.left())
-                right = current.right()
-                if right.viable:
-                    heapq.heappush(queue, current.right())
-                        
-        log.debug('Visited: %d, Pruned: %d, Skipped: %d', visited, pruned, skipped)
-        return Solution(best.items, best.selected)
+            take = current.take_next()
+            log.debug('Take: %s', take)
+            if take.viable:
+                if take.value > best.value:
+                    best = take
+                if take.estimate > best.value:
+                    heapq.heappush(queue, take)
+            
+            skip = current.skip_next()
+            log.debug('Skip: %s', skip)
+            if skip.viable:
+                if skip.estimate > best.value:
+                    heapq.heappush(queue, skip)
+    
+        return Solution(best.items, best.selected, optimal=True)
     
     
 class GeneticSolver(object):
@@ -248,17 +252,20 @@ class OpenOptSolver(object):
         self.constraints = lambda items: items['weight'] < problem.capacity
         
     def __call__(self):
-        from openopt import *
+        from openopt import KSP
         p = KSP('value', self.items, constraints = self.constraints)
-        r = p.solve('glpk', iprint=0)
-        print(r)
+        r = p.solve('glpk', iprint = -1)
+        selected = falses(len(self.items))
+        for i in r.xf:
+            selected[i] = True
+        return Solution(self.items, selected)
 
 
 def solve_it(input_data):
     problem = Problem.parse(input_data)
 #    solver = GreedySolver(problem, lambda item: item['index'])
-#    solver = BranchAndBoundSolver(problem)
-    solver = OpenOptSolver(problem)
+    solver = BranchAndBoundSolver(problem)
+    #solver = OpenOptSolver(problem)
     return str(solver())
 
 import sys, os
