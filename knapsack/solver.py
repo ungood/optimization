@@ -154,7 +154,7 @@ class Branch(object):
         self.estimate = self.calc_estimate() if self.viable else -1
         
     def __str__(self):
-        return "{0}\n\tvalue='{1}', weight='{2}', estimate='{3}'".format(self.selected, self.value, self.weight, self.estimate)
+        return "value = '{1}', weight='{2}', estimate='{3}'".format(self.selected, self.value, self.weight, self.estimate)
             
     def calc_estimate(self):    
         estimate = self.value
@@ -175,8 +175,8 @@ class Branch(object):
     def __cmp__(self, other):
         # heapq keeps the smallest item at the top, and I want to evaluate best-first,
         # so I need to reverse the compare.
-        #return cmp(other.value, self.value)
-        return cmp(self.estimate - self.value, other.estimate - other.value)
+        return cmp(other.estimate, self.estimate)
+        #return cmp(self.estimate - self.value, other.estimate - other.value)
         
     def skip_next(self):
         if self.leaf:
@@ -209,14 +209,13 @@ class BranchAndBoundSolver(object):
                 
         while len(queue) > 0:
             current = heapq.heappop(queue)
-            log.debug('Visiting: %s', current)
+            log.debug('Visiting: {%s} Best: {%s}', current, best)
                         
             if current.estimate < best.value:
                 log.debug('%d is less than %d. Pruned.', current.estimate, best.value)
                 continue
                 
             take = current.take_next()
-            log.debug('Take: %s', take)
             if take.viable:
                 if take.value > best.value:
                     best = take
@@ -224,7 +223,6 @@ class BranchAndBoundSolver(object):
                     heapq.heappush(queue, take)
             
             skip = current.skip_next()
-            log.debug('Skip: %s', skip)
             if skip.viable:
                 if skip.estimate > best.value:
                     heapq.heappush(queue, skip)
