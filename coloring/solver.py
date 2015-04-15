@@ -1,11 +1,29 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
+# 1/2 = 0.5
+from __future__ import division
 
-def solve_it(input_data):
-    # Modify this code to run your optimization algorithm
+import argparse
+from collections import namedtuple
 
-    # parse the input
+import logging
+logging.basicConfig(format='%(message)s', level=logging.CRITICAL)
+log = logging.getLogger(__name__)
+
+Problem = namedtuple('Problem', ['nodes', 'edges'])
+Solution = namedtuple('Solution', ['colors', 'optimal'])
+
+
+class TrivialSolver(object):
+    def __init__(self, problem):
+        self.colors = problem.nodes
+    
+    def solve(self):
+        return Solution(self.colors, False)
+
+
+def parse(input_data):
     lines = input_data.split('\n')
 
     first_line = lines[0].split()
@@ -17,27 +35,43 @@ def solve_it(input_data):
         line = lines[i]
         parts = line.split()
         edges.append((int(parts[0]), int(parts[1])))
+        
+    nodes = tuple(range(node_count))
+    edges = tuple(edges)
+    return Problem(nodes, edges)
 
-    # build a trivial solution
-    # every node has its own color
-    solution = range(0, node_count)
-
+def output(solution):
     # prepare the solution in the specified output format
-    output_data = str(node_count) + ' ' + str(0) + '\n'
-    output_data += ' '.join(map(str, solution))
+    color_count = len(set(solution.colors))
+    optimal = 1 if solution.optimal else 0
+    
+    output_data = '{0} {1}\n'.format(color_count, optimal)
+    output_data += ' '.join(map(str, solution.colors))
 
     return output_data
 
+def solve_it(input_data, solver_class=TrivialSolver):
+    problem = parse(input_data)
+    solver = solver_class(problem)
+    solution = solver.solve()
+    return output(solution)
 
 import sys
 
 if __name__ == '__main__':
-    if len(sys.argv) > 1:
-        file_location = sys.argv[1].strip()
-        input_data_file = open(file_location, 'r')
-        input_data = ''.join(input_data_file.readlines())
-        input_data_file.close()
-        print solve_it(input_data)
-    else:
-        print 'This test requires an input file.  Please select one from the data directory. (i.e. python solver.py ./data/gc_4_1)'
+    parser = argparse.ArgumentParser()
+    parser.add_argument('file', type=argparse.FileType('r'))
+    parser.add_argument('--debug', action='store_true')
+    
+    solvers = parser.add_subparsers(help='Select a solver to use')
+    solvers.add_parser('trivial').set_defaults(solver=TrivialSolver)
+    
+    args = parser.parse_args()
+    
+    if args.debug:
+        log.setLevel(logging.DEBUG)
+    
+    with args.file as f:
+        input_data = ''.join(f.readlines())
+        print(solve_it(input_data, args.solver))
 
